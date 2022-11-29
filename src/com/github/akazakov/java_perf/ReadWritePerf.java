@@ -1,4 +1,4 @@
-package com.github.akazakov.java_perf.read_write_file;
+package com.github.akazakov.java_perf;
 
 import org.openjdk.jmh.annotations.*;
 import org.openjdk.jmh.runner.Runner;
@@ -8,6 +8,7 @@ import org.openjdk.jmh.runner.options.OptionsBuilder;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.nio.MappedByteBuffer;
 import java.nio.channels.FileChannel;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -19,7 +20,7 @@ import java.util.concurrent.TimeUnit;
 @Measurement(iterations = 10, time = 5000, timeUnit = TimeUnit.MILLISECONDS)
 @Warmup(iterations = 3, time = 1000, timeUnit = TimeUnit.MILLISECONDS)
 @BenchmarkMode(Mode.Throughput)
-@Fork(1)
+@Fork(0)
 public class ReadWritePerf {
 
     int MB = 1024*1024;
@@ -29,23 +30,21 @@ public class ReadWritePerf {
     Path readPath;
     long fSize;
 
-    byte[] out = new byte[size];
-    byte[] in = new byte[size];
-    ByteBuffer inBuf = ByteBuffer.wrap(in);
-    ByteBuffer directBuf = ByteBuffer.allocateDirect(size);
-    int total = 0;
+    byte[] byteArray = new byte[size];
+    ByteBuffer normalByteBuffer = ByteBuffer.allocate(size);
+    ByteBuffer directByteBuffer = ByteBuffer.allocateDirect(size);
     FileChannel fc;
 
     @Setup
     public void setup() {
         for (int i = 0; i < size; i++) {
-            out[i] = (byte)i;
+            byteArray[i] = (byte)i;
         }
         try {
             Files.createDirectories(dir);
             readPath = Files.createTempFile(dir, "read_file", "tmp");
             writePath = dir.resolve("test123");
-            Files.write(readPath, out);
+            Files.write(readPath, byteArray);
             fSize = Files.size(readPath);
             fc = FileChannel.open(readPath, StandardOpenOption.READ);
         } catch (IOException e) {
@@ -55,51 +54,44 @@ public class ReadWritePerf {
     }
 
     @TearDown
-    public void tearDown() throws IOException, InterruptedException {
+    public void tearDown() throws IOException {
         fc.close();
-        Thread.sleep(1000);
-        System.out.println("Clean!");
-    }
-
-
-    @Benchmark
-    public void writeFileNio() throws IOException {
-        Files.write(writePath, out);
     }
 
     @Benchmark
-    public void readAllBytes() throws IOException {
-        total += Files.readAllBytes(readPath).length;
+    public Path writeFileNio() throws IOException {
+        return Files.write(writePath, byteArray);
     }
 
     @Benchmark
-    public void readNioStream() throws IOException {
+    public int readAllBytes() throws IOException {
+        return Files.readAllBytes(readPath).length;
+    }
+
+    @Benchmark
+    public int readNioStream() throws IOException {
         var is = Files.newInputStream(readPath);
-        is.read(in);
-        is.close();
+        return is.read(byteArray);
     }
 
     @Benchmark
-    public void readMappedFileCopy() throws IOException {
+    public ByteBuffer readMappedFileCopyToRegularBuffer() throws IOException {
         var readBuf = fc.map(FileChannel.MapMode.READ_ONLY, 0, fSize);
-        inBuf.rewind();
-        readBuf.rewind();
-        inBuf.put(readBuf);
+        normalByteBuffer.rewind();
+        return normalByteBuffer.put(readBuf);
     }
 
     @Benchmark
-    public void readMappedFileCopyDirect() throws IOException {
+    public ByteBuffer readMappedFileCopyDirect() throws IOException {
         var readBuf = fc.map(FileChannel.MapMode.READ_ONLY, 0, fSize);
-        directBuf.rewind();
-        readBuf.rewind();
-        directBuf.put(readBuf);
+        directByteBuffer.rewind();
+        return directByteBuffer.put(readBuf);
     }
 
     @Benchmark
-    public void readMappedFileLoad() throws IOException {
+    public MappedByteBuffer readMappedFileLoad() throws IOException {
         var readBuf = fc.map(FileChannel.MapMode.READ_ONLY, 0, fSize);
-        readBuf.load();
-        readBuf.isLoaded();
+        return readBuf.load();
     }
 
     public static void main(String[] args) throws RunnerException {
@@ -110,5 +102,4 @@ public class ReadWritePerf {
 
         new Runner(opt).run();
     }
-
 }
