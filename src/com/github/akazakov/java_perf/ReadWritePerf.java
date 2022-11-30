@@ -20,11 +20,11 @@ import java.util.concurrent.TimeUnit;
 @Measurement(iterations = 10, time = 5000, timeUnit = TimeUnit.MILLISECONDS)
 @Warmup(iterations = 3, time = 1000, timeUnit = TimeUnit.MILLISECONDS)
 @BenchmarkMode(Mode.Throughput)
-@Fork(0)
+@Fork(1)
 public class ReadWritePerf {
 
     int MB = 1024*1024;
-    int size = 2000 * MB;
+    int size = 1000 * MB;
     Path dir = Paths.get("/tmp/java_perf");
     Path writePath;
     Path readPath;
